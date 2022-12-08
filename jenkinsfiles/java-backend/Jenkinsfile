@@ -1,0 +1,209 @@
+echo "is PR branch: " + env.BRANCH_NAME.startsWith('PR')
+echo "Target branch: " + env.CHANGE_TARGET
+
+@NonCPS
+def printParams() {
+  env.getEnvironment().each { name, value -> println "$name -> $value" }
+}
+printParams()
+
+// We would not build every PR branch, only to development. In order to publish to production, we just needed to
+// promote our development image. This way, we could manage different versions and upgrade/downgrade as needed
+if (env.BRANCH_NAME.startsWith('PR') && !(env.CHANGE_TARGET == 'development')) {
+  echo "PR target is not development. Skipping build."
+  return
+}
+
+jsl = library(
+  identifier: 'jenkinsSharedLibrary@master',
+  retriever: modernSCM(
+    [
+      $class       : 'GitSCMSource',
+      remote       : 'git@bitbucket.org:pgeadas/jenkinssharedlibrary.git',
+      credentialsId: '1d1c111b-cd8d-4ee4-9c10-11d1e11b111a'
+    ]
+  )
+)
+
+List containers = [
+  containerTemplate(
+        name: 'docker',
+        image: 'docker:18.09.1-dind',
+        ttyEnabled: true,
+        privileged: true
+  ),
+  containerTemplate(
+        name: 'kubectl',
+        image: "1234567890.dkr.ecr.eu-west-1.amazonaws.com/helm-kube-iam:latest",
+        command: 'cat',
+        ttyEnabled: true,
+        privileged: true
+)]
+
+List envVars = [
+        envVar(key: 'k8s_REPO', value: 'git@bitbucket.org:pgeadas/kubernetes.git'),
+        envVar(key: 'api_REPO', value: 'git@bitbucket.org:pgeadas/java-backend.git'),
+        envVar(key: 'credentialsId', value: '7d0c391b-cd8d-4ee4-9c10-12d5e41b361a'),
+        envVar(key: 'ECR_URL', value: '578089560574.dkr.ecr.eu-west-1.amazonaws.com'),
+        envVar(key: 'ECR_CRED', value: 'ecr:eu-west-1:fa42e615-dbe9-45e4-9c58-46484dc33a8b'),
+        envVar(key: 'cache', value: 'cache-backend-api'),
+        envVar(key: 'service', value: 'backend-api'),
+        envVar(key: 'COMPONENT', value: 'backend'),
+        envVar(key: 'version', value: 'v')
+]
+
+// this guarantees the node will use this template
+def LABEL = "be-pod" + BUILD_ID
+
+gu = jsl.com.pgeadas.GitUtilities.new(this)
+du = jsl.com.pgeadas.DockerUtilities.new(this)
+ku = jsl.com.pgeadas.K8sUtilities.new(this)
+
+podTemplate(
+        cloud: 'development',
+        imagePullSecrets: ['my-registry'],
+        label: LABEL,
+        containers: containers,
+        envVars: envVars
+) {
+  node(LABEL) {
+    echo sh(script: 'env|sort', returnStdout: true)
+    buildService()
+    echo sh(script: 'env|sort', returnStdout: true)
+    deployService()
+  }
+}
+
+void buildService() {
+  if (gu.isPatchBranch()) { //"patch" branch to allow hotfixes in production
+    checkoutSCM("patch")
+    buildCache()
+    pushCacheToECR()
+    buildBackend()
+  } else if (!gu.isMasterBranch()) {
+    checkoutSCM()
+    buildCache()
+    pushCacheToECR()
+    buildBackend()
+  }
+}
+
+void checkoutSCM() {
+  checkoutSCM("")
+}
+
+void checkoutSCM(versionPrefix) {
+  stage('Checkout') {
+    echo "SCM"
+    checkout scm
+    version += versionPrefix
+    version += gu.getVersion()
+    echo "$version"
+  }
+}
+
+void buildCache() {
+  try {
+    stage("Pull $cache") {
+      du.pullImage(ECR_URL, ECR_CRED, cache)
+    }
+
+    stage("Build $cache from cache") {
+      du.tagImage("$ECR_URL/$cache", "$cache")
+      du.buildImage("--target builder --cache-from=$cache -t $cache --build-arg COMPONENT_NAME=$COMPONENT .")
+    }
+  } catch (Exception ex) {
+    echo "Failed to pull $cache. Building without cache: Exception: $ex"
+    stage("Build $cache from scratch") {
+      du.buildImage("--target builder -t $cache --build-arg COMPONENT_NAME=$COMPONENT .")
+    }
+  }
+}
+
+void pushCacheToECR() {
+  stage("Upload $cache") {
+    du.pushImage(ECR_URL, ECR_CRED, cache)
+  }
+}
+
+void buildBackend() {
+  stage("buildBackend") {
+    echo "building backend"
+    du.buildImage("--target prod --cache-from=$cache -t $service:$version --build-arg COMPONENT_NAME=$COMPONENT .")
+    du.tagImage("$service:$version", "$ECR_URL/$service:$version")
+  }
+}
+
+void deployService() {
+  stage("Deploy") {
+    if (gu.isDevelopmentBranch()) {
+      echo "development branch. publishing backend image to ECR"
+      du.pushImage(ECR_URL, ECR_CRED, "$ECR_URL/$service:$version")
+      ku.inDevelopmentCluster {
+        echo "inDevelopmentCluster"
+        deployAndTagImage("development", version)
+      }
+    } else if (gu.isMasterBranch()) {
+      ku.inProdCluster {
+        echo "inProdCluster"
+        promoteImage("development", "production") // if target was master, we only promote already built images from dev
+      }
+    } else if (gu.isPatchBranch()) {
+      echo "patch branch. Deploying Backend to Prod cluster"
+      du.pushImage(ECR_URL, ECR_CRED, "$ECR_URL/$service:$version")
+      ku.inProdCluster {
+        echo "inProdCluster"
+        deployAndTagImage("production", version)
+      }
+    }
+  }
+}
+
+void promoteImage(branch, clusterNamespace) {
+  echo "promoting $branch branch to $clusterNamespace namespace in cluster"
+  git branch: branch, credentialsId: credentialsId, url: api_REPO
+  version += gu.getVersion()
+  echo "version = $version"
+  echo "get k8s repo"
+  git branch: 'development', credentialsId: credentialsId, url: k8s_REPO
+  echo "get backend $version image"
+  du.pullImage(ECR_URL, ECR_CRED, "$ECR_URL/$service:$version")
+  deployAndTagImage(clusterNamespace, version)
+}
+
+void deployAndTagImage(clusterNamespace, version) {
+  echo "k8 publish to $clusterNamespace namespace in cluster"
+  parallelDeployBackendToK8s(clusterNamespace, version, service)
+  echo "push tag $clusterNamespace backend image"
+  tagAndPushToECR(clusterNamespace, service, version, ECR_URL, ECR_CRED)
+}
+
+void parallelDeployBackendToK8s(environment, version, service) {
+  stage("Copying environment files for service: $service") {
+    copyEnvironmentConfigs(environment)
+  }
+  parallel project1: {
+    deployToK8s('backend-project1', environment, version)
+  }, project2: {
+    deployToK8s('backend-project2', environment, version)
+  }
+}
+
+void deployToK8s(project, environment, version) {
+  stage("deploy to K8s backend: $project. Version: $version") {
+    ku.deployAPI(version, environment, project)
+  }
+}
+
+void tagAndPushToECR(environment, image, version, ECR_URL, ECR_CRED) {
+  stage("tagging and pushing to ECR: $image") {
+    du.tagImage("$ECR_URL/$image:$version", "$ECR_URL/$image:$environment")
+    du.pushImage(ECR_URL, ECR_CRED, "$ECR_URL/$image:$environment")
+  }
+}
+
+void copyEnvironmentConfigs(environment) {
+  git branch: 'development', credentialsId: credentialsId, url: k8s_REPO
+  sh "rm -rf charts/backend-api/environment"
+  sh "cp -rf environment/$environment/$service charts/backend-api/environment"
+}

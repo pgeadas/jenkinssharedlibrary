@@ -1,0 +1,160 @@
+jsl = library(
+  identifier: 'jenkinsSharedLibrary@master',
+  retriever: modernSCM(
+    [
+      $class       : 'GitSCMSource',
+      remote       : 'git@bitbucket.org:pgeadas/jenkinssharedlibrary.git',
+      credentialsId: '1d1c111b-cd8d-4ee4-9c10-11d1e11b111a'
+    ]
+  )
+)
+
+gu = jsl.com.pgeadas.GitUtilities.new(this)
+du = jsl.com.pgeadas.DockerUtilities.new(this)
+ku = jsl.com.pgeadas.K8sUtilities.new(this)
+ms = jsl.com.pgeadas.Microservice.new(this)
+
+def service = 'service-id'
+def servicePath = 'ServiceName' //name of the folder and project
+
+def label = "$service-pod"
+
+def version = 'v'
+def environment = ''
+
+def registryUrl = '1234567890.dkr.ecr.eu-west-1.amazonaws.com'
+def registryCode = 'ecr:eu-west-1:fa55e555-dbe9-55e5-5c55-55555dc55a5b'
+def k8sRepo = 'git@bitbucket.org:pgeadas/kubernetes.git'
+def gitCredentialsId = '1d1c111b-cd8d-4ee4-9c10-11d1e11b111a'
+
+def cache = "cache-$service-service"
+def image = "$service-service"
+
+podTemplate(
+  cloud: 'development',
+  imagePullSecrets: [registryUrl],
+  label: label,
+  containers: [
+    containerTemplate(
+      name: 'docker',
+      image: 'docker:18.09.1-dind',
+      resourceRequestCpu:'500m',
+      resourceLimitCpu: '1',
+      ttyEnabled: true,
+      privileged: true
+    ),
+    containerTemplate(
+      name: 'kubectl',
+      image: "1234567890.dkr.ecr.eu-west-1.amazonaws.com/helm-kube-iam:latest",
+      command: 'cat',
+      ttyEnabled: true,
+      privileged: true
+    )]
+) {
+  node(label) {
+    if (gu.isPRBranch() && gu.isPRTargetDevelopment()) {
+      stage('checkout') {
+        checkout scm
+      }
+      String currentBranchName = gu.getCurrentBranchName();
+      println "In branch: '${currentBranchName}'"
+      pushCodeToRepo('development', 'aux_develop')
+      stage('re-checkout') {
+        git branch: currentBranchName, credentialsId: gitCredentialsId, url: "git@bitbucket.org:pgeadas/microservices.git"
+      }
+      stage('checking for changes') {
+      }
+      if (!ms.isChanged(servicePath, currentBranchName, 'development')){
+        return
+      }
+      ms.buildAndRefreshCache(registryUrl, registryCode, cache, servicePath)
+      ms.testAndPublishResults(cache, image, servicePath)
+    } else if (gu.isPRBranch() && gu.isPRTargetMaster()) {
+      stage('checkout') {
+        checkout scm
+      }
+      String currentBranchName = gu.getCurrentBranchName();
+      println "In branch: '${currentBranchName}'"
+      pushCodeToRepo('master', 'aux_master')
+      stage('re-checkout') {
+        git branch: currentBranchName, credentialsId: gitCredentialsId, url: "git@bitbucket.org:pgeadas/microservices.git"
+      }
+      stage('checking for changes') {
+      }
+      if (!ms.isChanged(servicePath, currentBranchName, 'master')){
+        return
+      }
+      ms.buildAndRefreshCache(registryUrl, registryCode, cache, servicePath)
+      ms.testAndPublishResults(cache, image, servicePath)
+    } else if (env.BRANCH_NAME == 'development') {
+      checkoutCode('development', 'aux_development'))
+      stage('checking for changes') {
+      }
+      if (!ms.isChanged(servicePath, 'development', 'aux_development')){
+        return
+      }
+      ms.buildAndRefreshCache(registryUrl, registryCode, cache, servicePath)
+      ms.testAndPublishResults(cache, image, servicePath)
+      stage('build docker image') {
+        du.buildImage("--target production --cache-from=$cache -t $image:$version -f $servicePath/Dockerfile .")
+      }
+      tagAndPushToECR()
+      deployMicroservice('development')
+    } else if (env.BRANCH_NAME == 'master') {
+      checkoutCode('master', 'aux_master')
+      stage('checking for changes') {
+      }
+      if (!ms.isChanged(servicePath, 'master', 'aux_master')){
+        return
+      }
+      ms.buildAndRefreshCache(registryUrl, registryCode, cache, servicePath)
+      ms.testAndPublishResults(cache, image, servicePath)
+      stage('build docker image') {
+        du.buildImage("--target production --cache-from=$cache -t $image:$version -f $servicePath/Dockerfile .")
+      }
+      tagAndPushToECR()
+      deployMicroservice('development')
+    } else if (env.BRANCH_NAME == 'aux_develop') {
+      println "Skipping aux_develop"
+    } else if (env.BRANCH_NAME == 'aux_master') {
+      println "Skipping aux_master"
+    }
+  }
+}
+
+void deployMicroservice(environment) {
+  stage('deploy') {
+    du.tagImage("$registryUrl/$image:$version", "$registryUrl/$image:$environment")
+    ku.inDevelopmentCluster {
+      ku.deployMicroservice(k8sRepo, version, environment, 'project1', service, gitCredentialsId)
+      ku.deployMicroservice(k8sRepo, version, environment, 'project2', service, gitCredentialsId)
+    }
+    du.pushImage(registryUrl, registryCode, "$registryUrl/$image:$environment")
+  }
+}
+
+void tagAndPushToECR() {
+  stage("tagging and pushing to ECR: $image") {
+    du.tagImage("$image:$version", "$registryUrl/$image:$version")
+    du.pushImage(registryUrl, registryCode, "$image:$version")
+  }
+}
+
+void pushCodeToRepo(from, to) {
+  stage("pushing code from $from to: $to") {
+    sshagent (credentials: [gitCredentialsId]) {
+      git branch: to, credentialsId: gitCredentialsId, url: "git@bitbucket.org:pgeadas/microservices.git"
+      git branch: from, credentialsId: gitCredentialsId, url: "git@bitbucket.org:pgeadas/microservices.git"
+      gu.forcePushToBranch(from, to)
+    }
+  }
+}
+
+void checkoutCode(branch, aux_branch) {
+ stage('checkout') {
+    checkout scm
+    version += gu.getVersion()
+    git branch: aux_branch, credentialsId: gitCredentialsId, url: "git@bitbucket.org:pgeadas/microservices.git"
+    git branch: branch, credentialsId: gitCredentialsId, url: "git@bitbucket.org:pgeadas/microservices.git"
+  }
+}
