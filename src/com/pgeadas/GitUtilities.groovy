@@ -45,10 +45,6 @@ class GitUtilities implements Serializable {
         script.env.BRANCH_NAME.startsWith('PR')
     }
 
-    boolean isStagingBranch() {
-        script.env.BRANCH_NAME == 'staging'
-    }
-
     boolean isDevelopmentBranch() {
         script.env.BRANCH_NAME == 'development'
     }
