@@ -1,0 +1,28 @@
+replicaCount: 1
+
+project: example
+role: "arn:aws:iam::617172876354:role/example-role-read-role"
+
+image:
+  repository: 578089560574.dkr.ecr.eu-west-1.amazonaws.com/roles-read-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: "role-read-service-example"
+fullnameOverride: "role-read-service-example"
+
+service:
+  type: ClusterIP
+  port: 80
+
+resources:
+  limits:
+    memory: 60Mi
+    cpu: 500m
+  requests:
+    memory: 40Mi
+    cpu: 25m
+
+hpa:
+  cpu: 75
+  maxReplicas: 10

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: application-config-{{ include "notificator-service.fullname" . }}
+  labels:
+    app: {{ include "notificator-service.name" . }}
+    chart: {{ include "notificator-service.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+data:
+  {{- $files := .Files }}
+  appconfig.json: |-
+{{ $files.Get "environment/appconfig.json"  | indent 4}}

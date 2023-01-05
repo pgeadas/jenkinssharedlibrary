@@ -1,0 +1,24 @@
+role: "arn:aws:iam::617172876354:role/example-dailycatchfinisher-role"
+
+image:
+  repository: 578089560574.dkr.ecr.eu-west-1.amazonaws.com/dailycatchfinishercron-service
+  tag: development
+  pullPolicy: IfNotPresent
+
+schedule: "0 * * * *"
+failedJobsHistoryLimit: 10
+concurrencyPolicy: Forbid
+restartPolicy: OnFailure
+
+args:
+  - /bin/sh
+  - -c
+  - date; dotnet ./DailyCatchFinisherCron.dll
+
+resources:
+  limits:
+    memory: 60Mi
+    cpu: 500m
+  requests:
+    memory: 40Mi
+    cpu: 25m

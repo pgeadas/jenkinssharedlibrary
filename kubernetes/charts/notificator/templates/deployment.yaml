@@ -1,0 +1,60 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ include "notificator-service.fullname" . }}
+  labels:
+    app: {{ include "notificator-service.name" . }}
+    chart: {{ include "notificator-service.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "notificator-service.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "notificator-service.name" . }}
+        release: {{ .Release.Name }}
+      annotations:
+        checksum/config-app: {{ include (print $.Template.BasePath "/config/app-config.yaml") . | sha256sum }}
+        iam.amazonaws.com/role: {{ .Values.role }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          volumeMounts:
+            - name: application-config-{{ include "notificator-service.fullname" . }}-volume-conf
+              mountPath: /root/appconfig.json
+              subPath: appconfig.json
+            - name: secret-config-{{ include "notificator-service.fullname" . }}-volume-conf
+              mountPath: /root/signatureKey
+              subPath: signatureKey
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      volumes:
+      - name: application-config-{{ include "notificator-service.fullname" . }}-volume-conf
+        configMap:
+          name: application-config-{{ include "notificator-service.fullname" . }}
+      - name: secret-config-{{ include "notificator-service.fullname" . }}-volume-conf
+        secret:
+          secretName: {{ .Values.project }}-secret-keys-public
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}

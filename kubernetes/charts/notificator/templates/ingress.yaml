@@ -1,0 +1,41 @@
+{{- if .Values.ingress.enabled -}}
+{{- $fullName := include "notificator-service.fullname" . -}}
+{{- $ingressPath := .Values.ingress.path -}}
+{{- $ingressWSPath := .Values.ingress.wsPath -}}
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}
+  labels:
+    app: {{ include "notificator-service.name" . }}
+    chart: {{ include "notificator-service.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+{{- with .Values.ingress.annotations }}
+  annotations:
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+{{- if .Values.ingress.tls }}
+  tls:
+    - hosts:
+    {{- range .Values.ingress.hosts }}
+        - {{ . | quote }}
+    {{- end }}
+      secretName: {{ include "notificator-service.fullname" . }}-crt-secret-n
+{{- end }}
+  rules:
+  {{- range .Values.ingress.hosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          - path: {{ $ingressPath }}
+            backend:
+              serviceName: {{ $fullName }}
+              servicePort: http
+          - path: {{ $ingressWSPath }}
+            backend:
+              serviceName: {{ $fullName }}
+              servicePort: ws
+  {{- end }}
+{{- end }}

@@ -1,0 +1,63 @@
+{{- $chart_name := .Chart.Name }}
+{{- $chart_version := .Chart.Version | replace "+" "_" }}
+{{- $release_name := .Release.Name }}
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: "{{ $release_name }}"
+  labels:
+    chart: "{{ $chart_name }}-{{ $chart_version }}"
+spec:
+  concurrencyPolicy: {{ .Values.concurrencyPolicy }}
+  failedJobsHistoryLimit: {{ .Values.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: {{ $release_name }}
+          annotations:
+            iam.amazonaws.com/role: {{ .Values.role }}
+        spec:
+          containers:
+          - image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+            imagePullPolicy: {{ .Values.image.imagePullPolicy }}
+            name: {{ $release_name }}
+            volumeMounts:
+              - name: application-config-{{ $release_name }}-volume
+                mountPath: /root/appsettings.json
+                subPath: appsettings.json
+            {{- with .Values.env }}
+            env:
+{{ toYaml . | indent 12 }}
+            {{- end }}
+            {{- if .Values.command }}
+            command: {{ .Values.command }}
+            {{- end }}
+            {{- with .Values.args }}
+            args:
+{{ toYaml . | indent 12 }}
+            {{- end }}
+            {{- with .Values.resources }}
+            resources:
+{{ toYaml . | indent 14 }}
+            {{- end }}
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+{{ toYaml . | indent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
+{{ toYaml . | indent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+{{ toYaml . | indent 12 }}
+          {{- end }}
+          restartPolicy: {{ .Values.restartPolicy }}
+          volumes:
+          - name: application-config-{{ $release_name }}-volume
+            configMap:
+              name: application-config-{{ $release_name }}
+  schedule: {{ .Values.schedule | quote }}
+  successfulJobsHistoryLimit: {{ .Values.successfulJobsHistoryLimit }}

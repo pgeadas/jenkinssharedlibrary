@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  temppassword:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: temppassword
+      BillingMode: "PAY_PER_REQUEST"
+      AttributeDefinitions:
+        - AttributeName: "username"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "username"
+          KeyType: "HASH"
+  reward:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: reward
+      BillingMode: "PAY_PER_REQUEST"
+      AttributeDefinitions:
+        - AttributeName: "fullID"
+          AttributeType: "S"
+        - AttributeName: "username"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "fullID"
+          KeyType: "HASH"
+      GlobalSecondaryIndexes:
+        - IndexName: "reward_username"
+          KeySchema:
+            - AttributeName: "username"
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+  user:
+    Type: AWS::DynamoDB::Table
+    "DependsOn" : "reward" #this is done because DynamoDB can only create indexes for 1 table at a time
+    Properties:
+      TableName: user
+      BillingMode: "PAY_PER_REQUEST"
+      AttributeDefinitions:
+        - AttributeName: "username"
+          AttributeType: "S"
+        - AttributeName: "email"
+          AttributeType: "S"
+        - AttributeName: "fullphonenumber"
+          AttributeType: "S"
+        - AttributeName: "IGCID"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "username"
+          KeyType: "HASH"
+      GlobalSecondaryIndexes:
+        - IndexName: "user_email"
+          KeySchema:
+            - AttributeName: "email"
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+        - IndexName: "user_fullphonenumber"
+          KeySchema:
+            - AttributeName: "fullphonenumber"
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+        - IndexName: "user_igcid"
+          KeySchema:
+            - AttributeName: "IGCID"
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+  globalsystem:
+    Type: AWS::DynamoDB::Table
+    Properties: #this table is used to save properties, like IP whitelist
+      TableName: global_system
+      BillingMode: "PAY_PER_REQUEST"
+      AttributeDefinitions:
+        - AttributeName: "fullID"
+          AttributeType: "S"
+        - AttributeName: "dataType"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "fullID"
+          KeyType: "HASH"
+        - AttributeName: "dataType"
+          KeyType: "RANGE"
+      GlobalSecondaryIndexes:
+        - IndexName: "system_datatype"
+          KeySchema:
+            - AttributeName: "dataType"
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"

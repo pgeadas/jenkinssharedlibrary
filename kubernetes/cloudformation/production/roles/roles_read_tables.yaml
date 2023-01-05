@@ -1,0 +1,28 @@
+# I only include the fields that are keys
+# more info here:
+# Error:  Property AttributeDefinitions is inconsistent with the KeySchema of the table and the secondary indexes.
+# https://seed.run/docs/serverless-errors/property-attributedefinitions-is-inconsistent-with-the-keyschema-of-the-table-and-the-secondary-indexes.html
+AWSTemplateFormatVersion: "2010-09-09"
+Resources:
+  UserRole:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: UserRole
+      BillingMode: "PAY_PER_REQUEST"
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "N"
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"
+  Role:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Role
+      BillingMode: "PAY_PER_REQUEST"
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"

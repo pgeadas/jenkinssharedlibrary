@@ -1,0 +1,234 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Creates an environment for the role read service
+
+Parameters:
+  Project:
+    Description: The name of the project
+    Type: 'String'
+    AllowedValues:
+      - projectName
+  SNSTopic:
+    Description: The ARN of the SNS topic to subscribe to
+    Type: 'String'
+    Default: "arn:aws:sns:eu-west-1:578089560574:events-landing"
+  DeadLetterQueue:
+    Description: The ARN of the Dead Letter Queue
+    Type: 'String'
+    Default: "arn:aws:sqs:eu-west-1:578089560574:failedSNSMessages"
+
+Mappings:
+  NameMap:
+    queue-name:
+      projectName: "projectName-role-read"
+    role-name:
+      projectName: "projectName-role-read-role"
+    queue-policy-name:
+      projectName: "projectName-role-read-queue-access"
+    failed-queue-policy-name:
+      projectName: "projectName-role-read-failed-queue-access"
+    topic-policy-name:
+      projectName: "projectName-role-read-landing-access"
+    dynamodb-access-role-policy-name:
+      projectName: "projectName-role-read-role-dynamodb-access"
+    dynamodb-access-user-role-policy-name:
+      projectName: "projectName-role-read-user-role-dynamodb-access"
+
+Resources:
+  # Create a role that should have access to this environment
+  RoleReadServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !FindInMap [NameMap, "role-name", !Ref Project]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS:
+            - arn:aws:iam::578089560574:role/eksctl-staging-nodegroup-role-NodeInstanceRole-ROIWYF8CPKY5
+          Action:
+          - sts:AssumeRole
+
+  # Allow the role to send messages to the dead letter queue
+  SendToFailedMessagesQueuePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !FindInMap [NameMap, "failed-queue-policy-name", !Ref Project]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+            - 'sqs:SendMessage'
+          Resource:
+            - !Ref DeadLetterQueue
+      Roles:
+      - !Ref RoleReadServiceRole
+
+  # Allow the role to access dynamo db
+  AccessDynamoDBRolesPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !FindInMap [NameMap, "dynamodb-access-role-policy-name", !Ref Project]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+            - "dynamodb:DescribeTable"
+            - "dynamodb:BatchGet*"
+            - "dynamodb:Get*"
+            - "dynamodb:Query"
+            - "dynamodb:Scan"
+            - "dynamodb:BatchWrite*"
+            - "dynamodb:Delete*"
+            - "dynamodb:Update*"
+            - "dynamodb:PutItem"
+          Resource: "arn:aws:dynamodb:*:*:table/Role"
+        - Effect: Allow
+          Action:
+            - "dynamodb:*"
+          Resource: "arn:aws:dynamodb:*:*:table/Role/index/*"
+      Roles:
+      - !Ref RoleReadServiceRole
+  AccessDynamoDBUserRolesPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !FindInMap [NameMap, "dynamodb-access-user-role-policy-name", !Ref Project]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+            - "dynamodb:DescribeTable"
+            - "dynamodb:BatchGet*"
+            - "dynamodb:Get*"
+            - "dynamodb:Query"
+            - "dynamodb:Scan"
+            - "dynamodb:BatchWrite*"
+            - "dynamodb:Delete*"
+            - "dynamodb:Update*"
+            - "dynamodb:PutItem"
+          Resource: "arn:aws:dynamodb:*:*:table/UserRole"
+        - Effect: Allow
+          Action:
+            - "dynamodb:*"
+          Resource: "arn:aws:dynamodb:*:*:table/UserRole/index/*"
+      Roles:
+      - !Ref RoleReadServiceRole
+
+
+  # Allow the role to use publish to the topic
+  PublishToLandingSNSTopicPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !FindInMap [NameMap, "topic-policy-name", !Ref Project]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+            - 'sns:Publish'
+          Resource:
+            - !Ref SNSTopic
+      Roles:
+      - !Ref RoleReadServiceRole
+
+  # Create an SQS queue
+  RoleReadQueue:
+    Type: 'AWS::SQS::Queue'
+    Properties:
+      QueueName: !FindInMap [NameMap, "queue-name", !Ref Project]
+      Tags:
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+
+  # Allow the role to receive and delete messages
+  ListenToRoleReadQueuePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !FindInMap [NameMap, "queue-policy-name", !Ref Project]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'sqs:DeleteMessage'
+              - 'sqs:ReceiveMessage'
+            Resource:
+              - !GetAtt
+                - RoleReadQueue
+                - Arn
+      Roles:
+      - !Ref RoleReadServiceRole
+
+  # Attach a policy to an SQS queue
+  RoleReadQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Id: RoleReadQueuePolicy
+        Version: '2012-10-17'
+        Statement:
+        - Sid: Allow-SendMessage
+          Effect: Allow
+          Principal:
+            AWS: "*"
+          Action:
+          - sqs:SendMessage
+          Resource: "*"
+          Condition:
+            ArnEquals:
+              'aws:SourceArn': !Ref SNSTopic
+      Queues:
+      - !Ref RoleReadQueue
+
+  # Subscribe to a topic in SNS
+  SnsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: sqs
+      Endpoint: !GetAtt RoleReadQueue.Arn
+      RawMessageDelivery: true
+      FilterPolicy: {
+        "NotificationType": [
+          "RoleCreated",
+          "RoleDeactivated",
+          "RoleActivated",
+          "RoleDescriptionUpdated",
+          "RoleNameUpdated",
+          "RoleAssigned",
+          "RoleRevoke"]
+      }
+      TopicArn: !Ref SNSTopic
+
+Outputs:
+  QueueURL:
+    Description: URL of newly created SQS Queue
+    Value: !Ref RoleReadQueue
+  QueueARN:
+    Description: ARN of newly created SQS Queue
+    Value: !GetAtt
+      - RoleReadQueue
+      - Arn
+  QueueName:
+    Description: Name newly created SQS Queue
+    Value: !GetAtt
+      - RoleReadQueue
+      - QueueName
+  ServiceRoleName:
+    Description: The role that has access to this environment
+    Value: !Ref RoleReadServiceRole
+  ServiceRoleARN:
+    Description: ARN of the role that has access to this environment
+    Value: !GetAtt
+      - RoleReadServiceRole
+      - Arn

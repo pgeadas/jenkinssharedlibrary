@@ -1,0 +1,23 @@
+jobs:
+  # second cron
+  - name: dailycatchfinishercron
+    image:
+      repository: 578089560574.dkr.ecr.eu-west-1.amazonaws.com/dailycatchfinishercron-service
+      tag: latest
+      pullPolicy: IfNotPresent
+    schedule: "0 * * * *"
+    args:
+      - /bin/sh
+      - -c
+      - date; dotnet ./DailyCatchFinisherCron.dll
+    resources:
+      limits:
+        memory: 60Mi
+        cpu: 500m
+      requests:
+        memory: 40Mi
+        cpu: 25m
+    failedJobsHistoryLimit: 10
+    concurrencyPolicy: Forbid
+    restartPolicy: OnFailure
+    role: "arn:aws:iam::408316150150:role/projectName-dailycatchfinisher-role"

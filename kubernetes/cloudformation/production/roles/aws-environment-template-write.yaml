@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Creates an environment for the role write service
+
+Parameters:
+  Casino:
+    Description: The name of the casino (kk or as)
+    Type: 'String'
+    AllowedValues:
+      - kk
+      - as
+  SNSTopic:
+    Description: The ARN of the SNS topic in staging to subscribe to
+    Type: 'String'
+    Default: "arn:aws:sns:eu-west-1:578089560574:events-landing"
+  DeadLetterQueue:
+    Description: The ARN of the Dead Letter Queue
+    Type: 'String'
+    Default: "arn:aws:sqs:eu-west-1:578089560574:failedSNSMessages"
+
+Mappings:
+  NameMap:
+    role-name:
+      kk: "kk-role-write-role"
+      as: "as-role-write-role"
+    failed-queue-policy-name:
+      kk: "kk-role-write-failed-queue-access"
+      as: "as-role-write-failed-queue-access"
+    topic-policy-name:
+      kk: "kk-role-write-landing-access"
+      as: "as-role-write-landing-access"
+    dynamodb-access-events-policy-name:
+      kk: "kk-role-write-events-dynamodb-access"
+      as: "as-role-write-events-dynamodb-access"
+    dynamodb-access-aggregate-policy-name:
+      kk: "kk-role-write-aggregate-dynamodb-access"
+      as: "as-role-write-aggregate-dynamodb-access"
+
+Resources:
+
+  # Create a role that should have an access to this environment
+  RoleWriteServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !FindInMap [NameMap, "role-name", !Ref Casino]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS:
+            - arn:aws:iam::578089560574:role/eksctl-staging-nodegroup-role-NodeInstanceRole-ROIWYF8CPKY5
+          Action:
+          - sts:AssumeRole
+
+  # Allow the role to send messages to the dead letter queue
+  SendToFailedMessagesQueuePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !FindInMap [NameMap, "failed-queue-policy-name", !Ref Casino]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+            - 'sqs:SendMessage'
+          Resource:
+            - !Ref DeadLetterQueue
+      Roles:
+      - !Ref RoleWriteServiceRole
+
+  # Allow the role to use publish to the topic
+  PublishToLandingSNSTopicPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !FindInMap [NameMap, "topic-policy-name", !Ref Casino]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+            - 'sns:Publish'
+          Resource:
+            - !Ref SNSTopic
+      Roles:
+      - !Ref RoleWriteServiceRole
+
+  # Allow the role to access dynamo db
+  AccessEventsDynamoDBPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !FindInMap [NameMap, "dynamodb-access-events-policy-name", !Ref Casino]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+            - "dynamodb:DescribeTable"
+            - "dynamodb:BatchGet*"
+            - "dynamodb:Get*"
+            - "dynamodb:Query"
+            - "dynamodb:Scan"
+            - "dynamodb:BatchWrite*"
+            - "dynamodb:Delete*"
+            - "dynamodb:Update*"
+            - "dynamodb:PutItem"
+          Resource: "arn:aws:dynamodb:*:*:table/events"
+        - Effect: Allow
+          Action:
+            - "dynamodb:*"
+          Resource: "arn:aws:dynamodb:*:*:table/events/index/*"
+      Roles:
+      - !Ref RoleWriteServiceRole
+    # Allow the role to access dynamo db
+  AccessAggregatesDynamoDBPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !FindInMap [NameMap, "dynamodb-access-aggregate-policy-name", !Ref Casino]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+            - "dynamodb:DescribeTable"
+            - "dynamodb:BatchGet*"
+            - "dynamodb:Get*"
+            - "dynamodb:Query"
+            - "dynamodb:Scan"
+            - "dynamodb:BatchWrite*"
+            - "dynamodb:Delete*"
+            - "dynamodb:Update*"
+            - "dynamodb:PutItem"
+          Resource: "arn:aws:dynamodb:*:*:table/aggregates"
+        - Effect: Allow
+          Action:
+            - "dynamodb:*"
+          Resource: "arn:aws:dynamodb:*:*:table/aggregates/index/*"
+      Roles:
+      - !Ref RoleWriteServiceRole
+
+
+Outputs:
+
+  ServiceRoleName:
+    Description: The role that has access to this environment
+    Value: !Ref RoleWriteServiceRole
+  ServiceRoleARN:
+    Description: ARN of the role that has access to this environment
+    Value: !GetAtt
+      - RoleWriteServiceRole
+      - Arn

@@ -1,0 +1,33 @@
+replicaCount: 1
+
+project: projectName
+
+image:
+  repository: 578089560574.dkr.ecr.eu-west-1.amazonaws.com/backend-api
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  annotations:
+     kubernetes.io/ingress.class: traefik
+     ingress.kubernetes.io/ssl-redirect: "true"
+  path: /
+  hosts:
+    - api.example.com
+  tls: true
+
+resources:
+   limits:
+    cpu: 500m
+    memory: 750Mi
+   requests:
+    cpu: 300m
+    memory: 512Mi

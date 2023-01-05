@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: application-config-{{ include "project-frontend.fullname" . }}
+  labels:
+    app: {{ include "project-frontend.name" . }}
+    chart: {{ include "project-frontend.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+data:
+  {{- $files := .Files }}
+  environment.config.json: |-
+{{ $files.Get (printf "environment/%s/environment.config.json" .Values.project ) | indent 4}}
+  nginx.conf: |-
+{{ $files.Get (printf "environment/%s/nginx.conf" .Values.project ) | indent 4}}
+

@@ -1,0 +1,105 @@
+image:
+  repository: atmoz/sftp
+  tag: alpine-3.7
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 22
+
+sftpConfig:
+  users:
+    - username: segmentcronoperator
+      password: "9RJzqD84AZSnBwMw"
+      encrypted: false
+      uid: ""
+      gid: ""
+      authorizedKeys: {}
+      mountPath: /home/segmentcronoperator/ftp
+      subPath: ""
+    - username: segmentcarma
+      password: "kSAW89ZJYMBwfc8E"
+      encrypted: false
+      uid: ""
+      gid: ""
+      authorizedKeys: {}
+      mountPath: /home/segmentcarma/ftp
+      subPath: "inbox"
+  hostKeys: {}
+
+init:
+  enabled: true
+  script: |
+    #!/bin/bash
+    if ! [ -d /home/segmentcronoperator/ftp/inbox ]; then
+      mkdir /home/segmentcronoperator/ftp/inbox
+    fi
+    if ! [ -d /home/segmentcronoperator/ftp/processing ]; then
+      mkdir /home/segmentcronoperator/ftp/processing
+    fi
+    if ! [ -d /home/segmentcronoperator/ftp/processed ]; then
+      mkdir /home/segmentcronoperator/ftp/processed
+    fi
+    if ! [ -d /home/segmentcronoperator/ftp/failed ]; then
+      mkdir /home/segmentcronoperator/ftp/failed
+    fi
+    chmod -R a+rw /home/segmentcronoperator/ftp
+
+debug:
+  enabled: false
+  image:
+    repository: quay.io/travelping/nettools
+    tag: v1.10.0
+    pullPolicy: IfNotPresent
+
+persistentVolume:
+  enabled: true
+  annotations: {}
+  accessModes:
+    - ReadWriteMany
+  existingClaim: "segmentcron-production-projectName-data"
+
+vxlanController:
+  enabled: false
+  annotationKey: vxlan.openvnf.org/networks
+  metadataKey: vxlan.openvnf.org
+  image:
+    repository: openvnf/kube-vxlan-controller-agent
+    tag: 2.1.0
+    pullPolicy: IfNotPresent
+  network: "vxeth0"
+  ip: {}
+  route: {}
+  resources:
+    limits:
+      cpu: 50m
+      memory: 64Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+resources:
+  sftp:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  debug:
+    limits:
+      cpu: 100m
+      memory: 64Mi
+    requests:
+      cpu: 50m
+      memory: 32Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

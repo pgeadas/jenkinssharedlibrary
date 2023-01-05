@@ -1,0 +1,35 @@
+replicaCount: 1
+
+project: projectName
+role: "card-svc-role"
+
+image:
+  repository: 578089560574.dkr.ecr.eu-west-1.amazonaws.com/card-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    ingress.kubernetes.io/ssl-redirect: "true"
+    traefik.ingress.kubernetes.io/rule-type: "PathPrefixStrip"
+  path: /api/card
+  hosts:
+    - devapi.example.com
+  tls: true
+
+resources:
+  limits:
+    memory: 50Mi
+    cpu: 900m
+  requests:
+    memory: 20Mi
+    cpu: 100m

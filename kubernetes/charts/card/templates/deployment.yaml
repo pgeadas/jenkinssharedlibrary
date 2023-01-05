@@ -1,0 +1,72 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ include "card-service.fullname" . }}
+  labels:
+    app: {{ include "card-service.fullname" . }}
+    chart: {{ include "card-service.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "card-service.fullname" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "card-service.fullname" . }}
+        release: {{ .Release.Name }}
+      annotations:
+        checksum/config-app: {{ include (print $.Template.BasePath "/config/app-config.yaml") . | sha256sum }}
+        iam.amazonaws.com/role: {{ .Values.role }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          volumeMounts:
+            - name: application-config-{{ include "card-service.fullname" . }}-volume-conf
+              mountPath: /root/appsettings.json
+              subPath: appsettings.json
+            - name: secret-config-{{ include "card-service.fullname" . }}-volume-conf
+              mountPath: /root/signatureKey
+              subPath: signatureKey
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          livenessProbe:
+            initialDelaySeconds: 45
+            periodSeconds: 55
+            httpGet:
+              path: /liveness
+              port: http
+          readinessProbe:
+            initialDelaySeconds: 40
+            periodSeconds: 60
+            httpGet:
+              path: /readiness
+              port: http
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      volumes:
+      - name: application-config-{{ include "card-service.fullname" . }}-volume-conf
+        configMap:
+          name: application-config-{{ include "card-service.fullname" . }}
+      - name: secret-config-{{ include "card-service.fullname" . }}-volume-conf
+        secret:
+          secretName: {{ .Values.project }}-secret-keys-public
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}

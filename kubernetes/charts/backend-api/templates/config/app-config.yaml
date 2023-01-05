@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: application-config-{{ include "backend-api.fullname" . }}
+  labels:
+    app: {{ include "backend-api.fullname" . }}
+    chart: {{ include "backend-api.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+data:
+  {{- $files := .Files }}
+  application.conf: |-
+{{ $files.Get (printf "environment/%s/application.conf" .Values.project ) | indent 4}}
+  logback.xml: |-
+{{ $files.Get (printf "environment/%s/logback.xml" .Values.project ) | indent 4}}
+  sentry.properties: |-
+{{ $files.Get (printf "environment/%s/sentry.properties" .Values.project ) | indent 4}}
+  properties.properties: |-
+{{ $files.Get (printf "environment/%s/properties.properties" .Values.project ) | indent 4}}
+  routes: |-
+{{ $files.Get (printf "environment/%s/routes" .Values.project ) | indent 4}}

@@ -1,0 +1,103 @@
+image:
+  repository: atmoz/sftp
+  tag: alpine-3.7
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 22
+
+sftpConfig:
+  users:
+    - username: sftp-usera
+      password: ""
+      encrypted: false
+      uid: ""
+      gid: ""
+      authorizedKeys:
+        - usera-key1
+        - usera-key2
+      mountPath: /home/sftp-usera/ftp
+      subPath: "inbox"
+    - username: sftp-userb
+      password: ""
+      encrypted: false
+      uid: ""
+      gid: ""
+      authorizedKeys:
+        - userb-key1
+        - userb-key2
+      mountPath: /home/sftp-userb/ftp
+  hostKeys: {}
+    # secret: name-of-existing-secret
+    # keys:
+    # - ssh_host_rsa_key
+    # - ssh_host_ed25519_key
+
+init:
+  enabled: false
+  #script: |
+  #  #!/bin/bash
+  #  chmod -R a+rw /home/sftp-usera/ftp
+  #  chmod -R a+rw /home/sftp-userb/ftp
+
+debug:
+  enabled: false
+  image:
+    repository: quay.io/travelping/nettools
+    tag: v1.10.0
+    pullPolicy: IfNotPresent
+
+persistentVolume:
+  enabled: true
+  annotations: {}
+  accessModes:
+    - ReadWriteOnce
+  existingClaim: ""
+  size: 20Gi
+  # storageClass: "-"
+
+vxlanController:
+  enabled: false
+  annotationKey: vxlan.openvnf.org/networks
+  metadataKey: vxlan.openvnf.org
+  image:
+    repository: openvnf/kube-vxlan-controller-agent
+    tag: 2.1.0
+    pullPolicy: IfNotPresent
+  network: "vxeth0"
+  ip: {}
+  route: {}
+  resources:
+    limits:
+      cpu: 50m
+      memory: 64Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+resources:
+  sftp:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  debug:
+    limits:
+      cpu: 100m
+      memory: 64Mi
+    requests:
+      cpu: 50m
+      memory: 32Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

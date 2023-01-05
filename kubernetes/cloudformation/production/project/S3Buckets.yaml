@@ -1,0 +1,156 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  S3BucketStatic:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: prod-example-static
+      VersioningConfiguration:
+        Status: Enabled
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - 'HEAD'
+              - 'GET'
+            AllowedOrigins:
+              - '*.example.com'
+            MaxAge: 3000
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - 'HEAD'
+              - 'GET'
+            AllowedOrigins:
+              - '*'
+            MaxAge: 3000
+  BucketStaticPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      PolicyDocument:
+        Id: MyPolicy-static
+        Version: 2012-10-17
+        Statement:
+          - Sid: AddPerm
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Join ['', ['arn:aws:s3:::', !Ref S3BucketStatic, /*]]
+          - Sid: AddPerm
+            Effect: Allow
+            Principal:
+              AWS: 'arn:aws:iam::578089560574:user/atlas-stage'
+            Action: 's3:ListBucket'
+            Resource: !Join ['', ['arn:aws:s3:::', !Ref S3BucketStatic]]
+          - Sid: AddPerm
+            Effect: Allow
+            Principal:
+              AWS: 'arn:aws:iam::578089560574:user/atlas-stage'
+            Action:
+              - 's3:PutObject'
+              - 's3:PutObjectAcl'
+            Resource: !Join ['', ['arn:aws:s3:::', !Ref S3BucketStatic, /*]]
+          - Sid: AddPerm
+            Effect: Allow
+            Principal:
+              AWS: 'arn:aws:iam::578089560574:role/atlas-api-role'
+            Action: 's3:ListBucket'
+            Resource: !Join ['', ['arn:aws:s3:::', !Ref S3BucketStatic]]
+          - Sid: AddPerm
+            Effect: Allow
+            Principal:
+              AWS: 'arn:aws:iam::578089560574:role/atlas-api-role'
+            Action:
+              - 's3:PutObject'
+              - 's3:PutObjectAcl'
+            Resource: !Join ['', ['arn:aws:s3:::', !Ref S3BucketStatic, /*]]
+      Bucket: !Ref S3BucketStatic
+  S3BucketData:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: prod-example-data
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  BucketDataPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      PolicyDocument:
+        Id: MyPolicy-data
+        Version: 2012-10-17
+        Statement:
+          - Sid: AddPerm
+            Effect: Allow
+            Principal:
+              AWS: 'arn:aws:iam::578089560574:user/atlas-stage'
+            Action:
+              - 's3:GetObject'
+              - 's3:ListBucket'
+            Resource:
+              - !Join ['', ['arn:aws:s3:::', !Ref S3BucketData, /*]]
+              - !Join ['', ['arn:aws:s3:::', !Ref S3BucketData]]
+          - Sid: AddPerm
+            Effect: Allow
+            Principal:
+              AWS: 'arn:aws:iam::578089560574:user/atlas-stage'
+            Action:
+              - 's3:PutObject'
+              - 's3:PutObjectAcl'
+            Resource: !Join ['', ['arn:aws:s3:::', !Ref S3BucketData, /dictionaries/*]]
+          - Sid: AddPerm
+            Effect: Allow
+            Principal:
+              AWS: 'arn:aws:iam::578089560574:role/atlas-api-role'
+            Action:
+              - 's3:GetObject'
+              - 's3:ListBucket'
+            Resource:
+              - !Join ['', ['arn:aws:s3:::', !Ref S3BucketData, /*]]
+              - !Join ['', ['arn:aws:s3:::', !Ref S3BucketData]]
+          - Sid: AddPerm
+            Effect: Allow
+            Principal:
+              AWS: 'arn:aws:iam::578089560574:role/atlas-api-role'
+            Action:
+              - 's3:PutObject'
+              - 's3:PutObjectAcl'
+            Resource: !Join ['', ['arn:aws:s3:::', !Ref S3BucketData, /dictionaries/*]]
+      Bucket: !Ref S3BucketData
+
+  AtlasS3AccessRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      #Description: "Role for Atlas user to access the S3 buckets, so we can publish the dictionary"
+      RoleName: "atlas-s3-access-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - "sts:AssumeRole"
+            Principal:
+              AWS: "arn:aws:iam::578089560574:user/atlas-stage"
+          - Effect: "Allow"
+            Action:
+              - "sts:AssumeRole"
+            Principal:
+              AWS: "arn:aws:iam::578089560574:role/atlas-api-role"
+      Path: "/"
+      Policies:
+        - PolicyName: "s3-access-policy-projectName"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "s3:ListBucket"
+                Resource: "arn:aws:s3:::prod-example-static"
+              - Effect: "Allow"
+                Action:
+                  - "s3:ListBucket"
+                  - "s3:PutObject"
+                  - "s3:PutObjectAcl"
+                Resource: "arn:aws:s3:::prod-example-static/dictionaries/*"

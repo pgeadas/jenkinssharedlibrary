@@ -1,0 +1,40 @@
+replicaCount: 2
+
+project: projectName
+
+image:
+  repository: 578089560574.dkr.ecr.eu-west-1.amazonaws.com/frontend-projectName
+  tag: latest
+  pullPolicy: Always
+
+nameOverride: "project-frontend-production-projectName"
+fullnameOverride: "project-frontend-production-projectName"
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    ingress.kubernetes.io/ssl-redirect: "true"
+    ingress.kubernetes.io/ssl-host: "www.example.com"
+    ingress.kubernetes.io/ssl-force-host: "true"
+  path: /
+  hosts:
+    - www.example.com
+    - example.com
+  tls: true
+
+resources:
+  limits:
+    memory: 50Mi
+    cpu: 200m
+  requests:
+    memory: 5Mi
+    cpu: 50m
+
+hpa:
+  maxReplicas: 10
+  cpu: 75

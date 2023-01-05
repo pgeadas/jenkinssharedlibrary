@@ -1,0 +1,59 @@
+<configuration>
+
+  <conversionRule conversionWord="coloredLevel" converterClass="play.api.libs.logback.ColoredLevel"/>
+
+  <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${application.home:-.}/logs/application.log</file>
+    <encoder>
+      <pattern>[%d{HH:mm:ss.SSS}] - [%level] %X{logID} %X{username} %X{method} %X{path} - %message%n%xException{10}</pattern>
+    </encoder>
+    <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
+      <maxFileSize>100MB</maxFileSize>
+    </triggeringPolicy>
+  </appender>
+
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+      <evaluator>
+        <expression>return mdc.containsKey("path") &amp;&amp; (mdc.get("path").toString().contains("/liveness") || mdc.get("path").toString().contains("/readiness"));</expression>
+      </evaluator>
+      <OnMismatch>NEUTRAL</OnMismatch>
+      <OnMatch>DENY</OnMatch>
+    </filter>
+    <encoder>
+      <pattern>[%d{HH:mm:ss.SSS}] %level %X{logID} %X{username} %X{method} %X{path} - %message%n%xException{10}</pattern>
+    </encoder>
+  </appender>
+
+  <appender name="ASYNCFILE" class="ch.qos.logback.classic.AsyncAppender">
+    <appender-ref ref="FILE"/>
+  </appender>
+
+  <appender name="ASYNCSTDOUT" class="ch.qos.logback.classic.AsyncAppender">
+    <appender-ref ref="STDOUT"/>
+  </appender>
+
+  <appender name="Sentry" class="io.sentry.logback.SentryAppender">
+    <extraTags>serverAddress,serverName,serverType,logID,username,method,path,remoteIP,requestKey</extraTags>
+    <minLevel>WARN</minLevel>
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="Sentry"/>
+  </root>
+
+  <logger name="play" level="INFO"/>
+  <logger name="application" level="DEBUG"/>
+
+  <!-- Off these ones as they are annoying, and anyway we manage configuration ourselves -->
+  <logger name="com.avaje.ebean.config.PropertyMapLoader" level="OFF"/>
+  <logger name="com.avaje.ebeaninternal.server.core.XmlConfigLoader" level="OFF"/>
+  <logger name="com.avaje.ebeaninternal.server.lib.BackgroundThread" level="OFF"/>
+  <logger name="com.gargoylesoftware.htmlunit.javascript" level="OFF"/>
+
+  <root level="INFO">
+    <appender-ref ref="ASYNCFILE"/>
+    <appender-ref ref="ASYNCSTDOUT"/>
+  </root>
+
+</configuration>

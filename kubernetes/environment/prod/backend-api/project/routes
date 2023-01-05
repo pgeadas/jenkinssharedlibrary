@@ -1,0 +1,12 @@
+#NOTE: the dummy parameter is needed in order make the routes case insensitive. It's ugly but works.
+
+GET         /$dummy<(?i)api/v1/status>                              controllers.StatusController.message(dummy: String)
+GET         /$dummy<(?i)api/v1/liveness>                            controllers.StatusController.message(dummy: String)
+POST        /$dummy<(?i)api/v1/game/history/send>                   controllers.Games.GameController.sendHistory(dummy: String)
+GET         /$dummy<(?i)api/v1/game>/:id                            controllers.Games.GameController.get(dummy: String, id: Integer)
+
+## (...)
+
+# Map static resources from the /public folder to the / URL path
+GET         /                                                       controllers.Assets.at(path="/public", file = "index.html")
+GET         /*file                                                  controllers.Assets.versioned(path="/public", file: Asset)

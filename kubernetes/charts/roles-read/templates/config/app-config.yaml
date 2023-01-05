@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: application-config-{{ include "this-service.fullname" . }}
+  labels:
+    app: {{ include "this-service.name" . }}
+    chart: {{ include "this-service.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+data:
+  {{- $files := .Files }}
+  appsettings.json: |-
+{{ $files.Get "environment/appsettings.json"  | indent 4}}

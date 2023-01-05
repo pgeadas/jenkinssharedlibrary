@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Creates an environment for the segment cron
+
+Parameters:
+  Project:
+    Description: The name of the project
+    Type: 'String'
+    AllowedValues: 
+      - projectName
+  SNSTopic:
+    Description: The ARN of the SNS topic in staging to subscribe to
+    Type: 'String'
+  DeadLetterQueue:
+    Description: The ARN of the Dead Letter Queue
+    Type: 'String'
+
+Mappings:
+  NameMap:
+    role-name:
+      projectName: "projectName-segmentcron-role"
+    failed-queue-policy-name:
+      projectName: "projectName-segmentcron-failed-queue-access"
+    topic-policy-name:
+      projectName: "projectName-segmentcron-landing-access"
+    dynamodb-access-policy-name:
+      projectName: "projectName-segmentcron-dynamodb-access"
+
+Resources:
+
+  # Create a role that should have access to this environment
+  SegmentCronRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !FindInMap [NameMap, "role-name", !Ref Project]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS:
+            - arn:aws:iam::786991263349:role/eksctl-production-nodegroup-ng-pr-NodeInstanceRole-1M1S7LJJ23TU4
+            - arn:aws:iam::786991263349:role/kubernetes-cluster-node-instance-role
+          Action:
+          - sts:AssumeRole
+
+  # Allow the role to send messages to the dead letter queue
+  SendToFailedMessagesQueuePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !FindInMap [NameMap, "failed-queue-policy-name", !Ref Project]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+            - 'sqs:SendMessage'
+          Resource:
+            - !Ref DeadLetterQueue
+      Roles:
+      - !Ref SegmentCronRole
+
+  # Allow the role to use publish to the topic
+  PublishToLandingSNSTopicPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !FindInMap [NameMap, "topic-policy-name", !Ref Project]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+            - 'sns:Publish'
+          Resource:
+            - !Ref SNSTopic
+      Roles:
+      - !Ref SegmentCronRole
+
+  # Allow the role to access dynamo db
+  AccessDynamoDBPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !FindInMap [NameMap, "dynamodb-access-policy-name", !Ref Project]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+            - "dynamodb:DescribeTable"
+            - "dynamodb:BatchGet*"
+            - "dynamodb:Get*"
+            - "dynamodb:Query"
+            - "dynamodb:Scan"
+            - "dynamodb:BatchWrite*"
+            - "dynamodb:Delete*"
+            - "dynamodb:Update*"
+            - "dynamodb:PutItem"
+          Resource: "arn:aws:dynamodb:*:*:table/exportstats"
+        - Effect: Allow
+          Action:
+            - "dynamodb:DescribeTable"
+            - "dynamodb:BatchGet*"
+            - "dynamodb:Get*"
+            - "dynamodb:Query"
+            - "dynamodb:Scan"
+            - "dynamodb:BatchWrite*"
+            - "dynamodb:Delete*"
+            - "dynamodb:Update*"
+            - "dynamodb:PutItem"
+          Resource: "arn:aws:dynamodb:*:*:table/cardstats"
+      Roles:
+      - !Ref SegmentCronRole
+
+Outputs:
+  ServiceRoleName:
+    Description: The role that has access to this environment
+    Value: !Ref SegmentCronRole
+  ServiceRoleARN:
+    Description: ARN of the role that has access to this environment
+    Value: !GetAtt 
+      - SegmentCronRole
+      - Arn

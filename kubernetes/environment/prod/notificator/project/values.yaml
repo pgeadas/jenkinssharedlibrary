@@ -1,0 +1,40 @@
+replicaCount: 2
+
+project: projectName
+role: "arn:aws:iam::408316150150:role/projectName-notificator-role"
+
+image:
+  repository: 578089560574.dkr.ecr.eu-west-1.amazonaws.com/notificator-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: "notificator-service-projectName"
+fullnameOverride: "notificator-service-projectName"
+
+resources:
+  limits:
+    memory: 200Mi
+    cpu: 900m
+  requests:
+    memory: 65Mi
+    cpu: 100m
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    ingress.kubernetes.io/ssl-redirect: "true"
+  path: /
+  wsPath: /
+  hosts:
+    - ws.example.com
+  tls: true
+
+
+hpa:
+  maxReplicas: 10
+  cpu: 75

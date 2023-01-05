@@ -1,0 +1,50 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ include "mongolog-service.fullname" . }}
+  labels:
+    app: {{ include "mongolog-service.name" . }}
+    chart: {{ include "mongolog-service.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "mongolog-service.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "mongolog-service.name" . }}
+        release: {{ .Release.Name }}
+      annotations:
+        checksum/config-app: {{ include (print $.Template.BasePath "/config/app-config.yaml") . | sha256sum }}
+        iam.amazonaws.com/role: {{ .Values.role }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          volumeMounts:
+            - name: application-config-{{ include "mongolog-service.fullname" . }}-volume-conf
+              mountPath: /root/appsettings.json
+              subPath: appsettings.json
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      volumes:
+      - name: application-config-{{ include "mongolog-service.fullname" . }}-volume-conf
+        configMap:
+          name: application-config-{{ include "mongolog-service.fullname" . }}
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}

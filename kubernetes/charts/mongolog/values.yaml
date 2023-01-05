@@ -1,0 +1,20 @@
+replicaCount: 1
+
+project: projectName
+role: "mongolog-svc-role"
+
+image:
+  repository: 578089560574.dkr.ecr.eu-west-1.amazonaws.com/mongolog-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+resources:
+  limits:
+    memory: 50Mi
+    cpu: 900m
+  requests:
+    memory: 20Mi
+    cpu: 100m

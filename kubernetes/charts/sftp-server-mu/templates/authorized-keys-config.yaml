@@ -1,0 +1,15 @@
+{{- $fullname := include "sftp-server.fullname" . }}
+{{- range $user := .Values.sftpConfig.users }}
+{{- if $user.authorizedKeys }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-{{ $user.username }}-authorized-keys
+data:
+  id_rsa.pub: |
+    {{- range $user.authorizedKeys }}
+    {{ . }}
+    {{- end }}
+{{- end }}
+---
+{{- end }}

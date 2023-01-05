@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Creates an SQS queue for notificator service
+
+Parameters:
+  Project:
+    Description: The name of the project
+    Type: 'String'
+    AllowedValues:
+      - projectName
+  SNSTopic:
+    Description: The ARN of the SNS topic in staging to subscribe to
+    Type: 'String'
+  AlarmEMail:
+    Description: EMail address to notify if there are any operational issues
+    Type: String
+    AllowedPattern: >-
+      ([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)
+    ConstraintDescription: Must be a valid email address.
+    Default: "dev-team@example.com"
+
+Mappings:
+  NameMap:
+    queue-name:
+      projectName: "projectName-notificator"
+    role-name:
+      projectName: "projectName-notificator-role"
+    queue-policy-name:
+      projectName: "projectName-notificator-queue-access"
+
+Resources:
+  # Create a role that should have access to this environment
+  NotificatorServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !FindInMap [NameMap, "role-name", !Ref Project]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS:
+            - arn:aws:iam::786991263349:role/eksctl-production-nodegroup-ng-pr-NodeInstanceRole-1M1S7LJJ23TU4
+            - arn:aws:iam::786991263349:role/kubernetes-cluster-node-instance-role
+          Action:
+          - sts:AssumeRole
+
+  # Create an SQS queue
+  NotificatorQueue:
+    Type: 'AWS::SQS::Queue'
+    Properties:
+      QueueName: !FindInMap [NameMap, "queue-name", !Ref Project]
+      Tags:
+        - Key: Stack
+          Value: !Ref 'AWS::StackName'
+
+  # Allow the role to receive and delete messages
+  ListenToNotificatorQueuePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !FindInMap [NameMap, "queue-policy-name", !Ref Project]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'sqs:DeleteMessage'
+              - 'sqs:ReceiveMessage'
+            Resource:
+              - !GetAtt
+                - NotificatorQueue
+                - Arn
+      Roles:
+      - !Ref NotificatorServiceRole
+
+  # Attach a policy to an SQS queue
+  NotificatorQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Id: NotificatorQueuePolicy
+        Version: '2012-10-17'
+        Statement:
+        - Sid: Allow-SendMessage
+          Effect: Allow
+          Principal:
+            AWS: "*"
+          Action:
+          - sqs:SendMessage
+          Resource: "*"
+          Condition:
+            ArnEquals:
+              'aws:SourceArn': !Ref SNSTopic
+      Queues:
+      - !Ref NotificatorQueue
+
+  # Subscribe to a topic in SNS
+  SnsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: sqs
+      Endpoint: !GetAtt NotificatorQueue.Arn
+      RawMessageDelivery: true
+      FilterPolicy: {
+        "NotificationType": ["WalletUpdatedEvent", "RaffleTicketUpdatedEvent"]
+      }
+      TopicArn: !Ref SNSTopic
+
+  # Create topic for alarms
+  AlarmTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      Subscription:
+        - Endpoint: !Ref AlarmEMail
+          Protocol: email
+
+  # Create cloud watch alarm
+  QueueDepthAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Join [ "-", [ "PROD", !FindInMap [NameMap, "queue-name", !Ref Project] ] ]
+      AlarmDescription: Alarm if queue depth grows beyond 1000 messages
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt
+            - NotificatorQueue
+            - QueueName
+      Statistic: Sum
+      Period: 300 # in seconds
+      EvaluationPeriods: 1
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlarmTopic
+      InsufficientDataActions:
+        - !Ref AlarmTopic
+
+Outputs:
+  QueueURL:
+    Description: URL of newly created SQS Queue
+    Value: !Ref NotificatorQueue
+  QueueARN:
+    Description: ARN of newly created SQS Queue
+    Value: !GetAtt
+      - NotificatorQueue
+      - Arn
+  QueueName:
+    Description: Name newly created SQS Queue
+    Value: !GetAtt
+      - NotificatorQueue
+      - QueueName
+  ServiceRoleName:
+    Description: The role that has access to this environment
+    Value: !Ref NotificatorServiceRole
+  ServiceRoleARN:
+    Description: ARN of the role that has access to this environment
+    Value: !GetAtt
+      - NotificatorServiceRole
+      - Arn

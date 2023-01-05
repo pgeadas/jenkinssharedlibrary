@@ -1,0 +1,22 @@
+role: "job-role"
+
+image:
+  repository: ubuntu
+  tag: latest
+  pullPolicy: Always
+schedule: "*/5 * * * *"
+command: ["/bin/bash"]
+args:
+  - "-c"
+  - "echo $(date) - hello from ubuntu"
+resources:
+  limits:
+    cpu: 50m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 256Mi
+failedJobsHistoryLimit: 1
+successfulJobsHistoryLimit: 3
+concurrencyPolicy: Forbid
+restartPolicy: OnFailure

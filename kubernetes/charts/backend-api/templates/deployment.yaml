@@ -1,0 +1,108 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ include "backend-api.fullname" . }}
+  labels:
+    app: {{ include "backend-api.fullname" . }}
+    chart: {{ include "backend-api.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "backend-api.fullname" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "backend-api.fullname" . }}
+        release: {{ .Release.Name }}
+      annotations:
+        checksum/config-app: {{ include (print $.Template.BasePath "/config/app-config.yaml") . | sha256sum }}
+        iam.amazonaws.com/role: {{ .Values.role }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          volumeMounts:
+            - name: application-config-{{ include "backend-api.fullname" . }}-volume-appconf
+              mountPath: /var/opt/docker/conf/application.conf
+              subPath: application.conf
+            - name: application-config-{{ include "backend-api.fullname" . }}-volume-routes
+              mountPath: /var/opt/docker/conf/routes
+              subPath: routes
+            - name: application-config-{{ include "backend-api.fullname" . }}-volume-props
+              mountPath: /var/opt/docker/conf/properties.properties
+              subPath: properties.properties
+            - name: application-config-{{ include "backend-api.fullname" . }}-volume-logback
+              mountPath: /var/opt/docker/conf/logback.xml
+              subPath: logback.xml
+            - name: application-config-{{ include "backend-api.fullname" . }}-volume-sentry
+              mountPath: /var/opt/docker/conf/sentry.properties
+              subPath: sentry.properties
+            - name: volume-secrets-public
+              mountPath: /var/opt/docker/conf/signatureKey
+              subPath: signatureKey
+              readOnly: true
+            - name: volume-secrets-public
+              mountPath: /var/opt/docker/conf/publicKey
+              subPath: publicKey
+              readOnly: true
+            - name: volume-secrets-private
+              mountPath: /var/opt/docker/conf/privateKey
+              subPath: privateKey
+              readOnly: true
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 9000
+              protocol: TCP
+          livenessProbe:
+            initialDelaySeconds: 55
+            periodSeconds: 5
+            httpGet:
+              path: /api/v1/liveness
+              port: http
+          readinessProbe:
+            initialDelaySeconds: 50
+            periodSeconds: 5
+            httpGet:
+              path: /api/v1/readiness
+              port: http
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      volumes:
+      - name: application-config-{{ include "backend-api.fullname" . }}-volume-appconf
+        configMap:
+          name: application-config-{{ include "backend-api.fullname" . }}
+      - name: application-config-{{ include "backend-api.fullname" . }}-volume-routes
+        configMap:
+          name: application-config-{{ include "backend-api.fullname" . }}
+      - name: application-config-{{ include "backend-api.fullname" . }}-volume-props
+        configMap:
+          name: application-config-{{ include "backend-api.fullname" . }}
+      - name: application-config-{{ include "backend-api.fullname" . }}-volume-logback
+        configMap:
+          name: application-config-{{ include "backend-api.fullname" . }}
+      - name: application-config-{{ include "backend-api.fullname" . }}-volume-sentry
+        configMap:
+          name: application-config-{{ include "backend-api.fullname" . }}
+      - name: volume-secrets-public
+        secret:
+          secretName: {{ .Values.project }}-secret-keys-public
+      - name: volume-secrets-private
+        secret:
+          secretName: {{ .Values.project }}-secret-keys-private
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}

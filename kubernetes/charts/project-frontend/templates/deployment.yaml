@@ -1,0 +1,71 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ include "project-frontend.fullname" . }}
+  labels:
+    app: {{ include "project-frontend.name" . }}
+    chart: {{ include "project-frontend.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "project-frontend.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "project-frontend.name" . }}
+        release: {{ .Release.Name }}
+      annotations:
+        checksum/config-app: {{ include (print $.Template.BasePath "/config/app-config.yaml") . | sha256sum }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          volumeMounts:
+            - name: application-config-{{ include "project-frontend.fullname" . }}-volume-nginx
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+            - name: application-config-{{ include "project-frontend.fullname" . }}-volume-conf
+              mountPath: /usr/share/nginx/html/assets/environment/environment.config.json
+              subPath: environment.config.json
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          livenessProbe:
+            initialDelaySeconds: 20
+            periodSeconds: 2
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            httpGet:
+              path: /
+              port: http
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      volumes:
+      - name: application-config-{{ include "project-frontend.fullname" . }}-volume-nginx
+        configMap:
+          name: application-config-{{ include "project-frontend.fullname" . }}
+      - name: application-config-{{ include "project-frontend.fullname" . }}-volume-conf
+        configMap:
+          name: application-config-{{ include "project-frontend.fullname" . }}
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}

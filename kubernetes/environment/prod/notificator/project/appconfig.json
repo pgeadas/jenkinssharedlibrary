@@ -1,0 +1,35 @@
+{
+  "app": {
+    "port": 80,
+    "adapter": true,
+    "waitingTimeInMS": 101,
+    "whitelist": ["example.com", "www.example.com"]
+  },
+  "socket": {
+    "origins": "*:*",
+    "pingInterval": 10000,
+    "pingTimeout": 5000,
+    "cookie": false
+  },
+  "jwt": {
+    "algorithms": ["HS256", "HS384", "RS256"],
+    "issuer": "api.example.com",
+    "audience": "services.example.com",
+    "ignoreExpiration": true
+  },
+  "adapter": {
+    "host": "project-cache-prod.3iaxir.ng.0001.euw1.cache.amazonaws.com",
+    "port": 6379,
+    "key": "prod-ws-projectName"
+  },
+  "aws": {
+    "sqs": {
+      "queue": "https://sqs.eu-west-1.amazonaws.com/408316150150/projectName-notificator",
+      "region": "eu-west-1",
+      "params": {
+        "MaxNumberOfMessages": 10,
+        "VisibilityTimeout": 20
+      }
+    }
+  }
+}

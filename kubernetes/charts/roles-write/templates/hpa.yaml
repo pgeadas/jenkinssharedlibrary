@@ -1,0 +1,48 @@
+{{- if .Values.hpa -}}
+apiVersion: autoscaling/v2beta1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "this-service.fullname" . }}-hpa
+  labels:
+    app: {{ include "this-service.name" . }}
+    chart: {{ include "this-service.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ .Release.Name }}
+  minReplicas: {{ .Values.replicaCount }}
+  maxReplicas: {{ .Values.hpa.maxReplicas }}
+  metrics:
+  {{- if .Values.hpa.cpu }}
+  - type: Resource
+    resource:
+      name: cpu
+      targetAverageUtilization: {{ .Values.hpa.cpu }}
+  {{- end }}
+  {{- if .Values.hpa.memory }}
+  - type: Resource
+    resource:
+      name: memory
+      targetAverageValue: {{ .Values.hpa.memory }}
+  {{- end }}
+  {{- if .Values.hpa.packetspersecond }}
+  - type: Pods
+    pods:
+      metric:
+        name: packets-per-second
+      targetAverageValue: {{ .Values.hpa.packetspersecond }}
+  {{- end }}
+  {{- if .Values.hpa.requests }}
+  - type: Object
+    object:
+      target:
+        apiVersion: extensions/v1beta1
+        kind: Ingress
+        name: main-route
+      targetValue: {{ .Values.hpa.requests }}
+      metricName: requests-per-second
+  {{- end }}
+{{- end }}

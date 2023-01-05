@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: application-config-{{ include "mongolog-service.fullname" . }}
+  labels:
+    app: {{ include "mongolog-service.name" . }}
+    chart: {{ include "mongolog-service.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+data:
+  {{- $files := .Files }}
+  appsettings.json: |-
+{{ $files.Get "environment/appsettings.json"  | indent 4}}
