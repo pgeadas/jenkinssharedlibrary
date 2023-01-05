@@ -1,0 +1,30 @@
+AdminPassword: example123
+
+Master:
+  Name: master
+  ServiceType: ClusterIP
+  Ingress:
+    Annotations:
+      kubernetes.io/ingress-class: traefik
+      kubernetes.io/ingress.allow-http: "false"
+      kubernetes.io/tls-acme: 'true'
+      certmanager.k8s.io/issuer: letsencrypt-prod
+    TLS:
+    - hosts:
+      - ci.example.com
+      secretName: jenkins-crt
+    Path: /
+
+  HostName: ci.example.com
+
+Persistence:
+  Enabled: true
+  Size: 100G
+  StorageClass: default
+rbac:
+  install: true
+  roleRef: cluster-admin
+  roleBindingKind: ClusterRoleBinding
+
+Agent:
+  Enabled: false

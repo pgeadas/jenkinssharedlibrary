@@ -1,0 +1,186 @@
+image:
+  repository: fluent/fluentd-kubernetes-daemonset
+  tag: v1.4-debian-cloudwatch-1
+## Specify an imagePullPolicy (Required)
+## It's recommended to change this to 'Always' if the image tag is 'latest'
+## ref: http://kubernetes.io/docs/user-guide/images/#updating-images
+  pullPolicy: IfNotPresent
+
+## Configure resource requests and limits
+## ref: http://kubernetes.io/docs/user-guide/compute-resources/
+##
+resources:
+  limits:
+    cpu: 200m
+    memory: 300Mi
+  requests:
+    cpu: 100m
+    memory: 200Mi
+
+# hostNetwork: false
+
+## Add tolerations if specified
+tolerations: []
+#   - key: node-role.kubernetes.io/master
+#     operator: Exists
+#     effect: NoSchedule
+
+annotations: {}
+
+awsRegion: eu-west-1
+#awsRole:
+awsAccessKeyId: AKIA3OPCVVZ2ZW6J35WN
+awsSecretAccessKey: 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
+logGroupName: kubernetes
+extraVars:
+- "{ name: FLUENT_UID, value: ‘0’ }"
+
+rbac:
+  ## If true, create and use RBAC resources
+  create: true
+
+  ## Ignored if rbac.create is true
+  serviceAccountName: default
+
+
+data:
+  fluent.conf: |
+    <match fluent.**>
+      @type null
+    </match>
+    <source>
+      @type tail
+      enable_stat_watcher false
+      path /var/log/containers/*.log
+      pos_file /var/log/fluentd-containers.log.pos
+      time_format %Y-%m-%dT%H:%M:%S.%NZ
+      tag kubernetes.*
+      format json
+      read_from_head true
+    </source>
+    <source>
+      @type tail
+      enable_stat_watcher false
+      format /^(?<time>[^ ]* [^ ,]*)[^\[]*\[[^\]]*\]\[(?<severity>[^ \]]*) *\] (?<message>.*)$/
+      time_format %Y-%m-%d %H:%M:%S
+      path /var/log/salt/minion
+      pos_file /var/log/fluentd-salt.pos
+      tag salt
+    </source>
+    <source>
+      @type tail
+      enable_stat_watcher false
+      format syslog
+      path /var/log/startupscript.log
+      pos_file /var/log/fluentd-startupscript.log.pos
+      tag startupscript
+    </source>
+    <source>
+      @type tail
+      enable_stat_watcher false
+      format /^time="(?<time>[^)]*)" level=(?<severity>[^ ]*) msg="(?<message>[^"]*)"( err="(?<error>[^"]*)")?( statusCode=($<status_code>\d+))?/
+      path /var/log/docker.log
+      pos_file /var/log/fluentd-docker.log.pos
+      tag docker
+    </source>
+    <source>
+      @type tail
+      enable_stat_watcher false
+      format none
+      path /var/log/etcd.log
+      pos_file /var/log/fluentd-etcd.log.pos
+      tag etcd
+    </source>
+    <source>
+      @type tail
+      enable_stat_watcher false
+      format kubernetes
+      multiline_flush_interval 5s
+      path /var/log/kubelet.log
+      pos_file /var/log/fluentd-kubelet.log.pos
+      tag kubelet
+    </source>
+    <source>
+      @type tail
+      enable_stat_watcher false
+      format kubernetes
+      multiline_flush_interval 5s
+      path /var/log/kube-proxy.log
+      pos_file /var/log/fluentd-kube-proxy.log.pos
+      tag kube-proxy
+    </source>
+    <source>
+      @type tail
+      enable_stat_watcher false
+      format kubernetes
+      multiline_flush_interval 5s
+      path /var/log/kube-apiserver.log
+      pos_file /var/log/fluentd-kube-apiserver.log.pos
+      tag kube-apiserver
+    </source>
+    <source>
+      @type tail
+      enable_stat_watcher false
+      format kubernetes
+      multiline_flush_interval 5s
+      path /var/log/kube-controller-manager.log
+      pos_file /var/log/fluentd-kube-controller-manager.log.pos
+      tag kube-controller-manager
+    </source>
+    <source>
+      @type tail
+      enable_stat_watcher false
+      format kubernetes
+      multiline_flush_interval 5s
+      path /var/log/kube-scheduler.log
+      pos_file /var/log/fluentd-kube-scheduler.log.pos
+      tag kube-scheduler
+    </source>
+    <source>
+      @type tail
+      enable_stat_watcher false
+      format kubernetes
+      multiline_flush_interval 5s
+      path /var/log/rescheduler.log
+      pos_file /var/log/fluentd-rescheduler.log.pos
+      tag rescheduler
+    </source>
+    <source>
+      @type tail
+      enable_stat_watcher false
+      format kubernetes
+      multiline_flush_interval 5s
+      path /var/log/glbc.log
+      pos_file /var/log/fluentd-glbc.log.pos
+      tag glbc
+    </source>
+    <source>
+      @type tail
+      enable_stat_watcher false
+      format kubernetes
+      multiline_flush_interval 5s
+      path /var/log/cluster-autoscaler.log
+      pos_file /var/log/fluentd-cluster-autoscaler.log.pos
+      tag cluster-autoscaler
+    </source>
+    <filter kubernetes.**>
+      @type kubernetes_metadata
+    </filter>
+
+    <filter kubernetes.**>
+      @type record_transformer
+      enable_ruby
+      <record>
+        log_group_name /app/${record["kubernetes"]["namespace_name"]}/${record["kubernetes"]["labels"]["app"]}
+        log_stream_name ${record["kubernetes"]["pod_name"]}
+      </record>
+    </filter>
+
+    <match kubernetes.**>
+      @type cloudwatch_logs
+      auto_create_stream true
+      log_group_name_key log_group_name
+      log_stream_name_key log_stream_name
+      retention_in_days 7
+      message_keys log
+    </match>

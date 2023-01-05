@@ -1,0 +1,18 @@
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: Certificate
+metadata:
+  name: sentry-example
+  namespace: sentry
+spec:
+  acme:
+    config:
+    - domains:
+      - sentry.example.com
+      http01:
+        ingressClass: traefik
+  dnsNames:
+  - sentry.example.com
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-prod
+  secretName: sentry-crt-secret

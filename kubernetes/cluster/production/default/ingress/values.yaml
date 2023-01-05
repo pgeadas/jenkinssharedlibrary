@@ -1,0 +1,101 @@
+image: traefik
+imageTag: 1.7.12
+
+serviceType: LoadBalancer
+externalTrafficPolicy: Cluster
+replicas: 2
+
+# This is needed to enable the FORWARDED_FOR header
+service:
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
+
+cpuRequest: 100m
+memoryRequest: 20Mi
+cpuLimit: 500m
+memoryLimit: 250Mi
+
+debug:
+  enabled: false
+
+ssl:
+  enabled: true
+  enforced: false
+
+deploymentStrategy:
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+  type: RollingUpdate
+
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+    - labelSelector:
+        matchExpressions:
+        - key: app
+          operator: In
+          values:
+          - traefik
+      topologyKey: "kubernetes.io/hostname"
+
+## Kubernetes ingress filters
+kubernetes:
+  # endpoint:
+  namespaces:
+  - default
+  - kube-system
+  - kube-public
+  - production
+  - monitoring
+  - cert-manager
+  - sentry
+  - wordpress
+
+proxyProtocol:
+  enabled: true
+  # trustedIPs is required when enabled. This is needed to enable the FORWARDED_FOR header
+  trustedIPs:
+  - 10.0.0.0/8
+  - 192.168.0.0/16
+
+dashboard:
+  enabled: true
+  domain: production-traefik.example.com
+
+gzip:
+  enabled: true
+traefikLogFormat: json
+
+accessLogs:
+  enabled: true
+  format: json
+  fields:
+    # choices are keep, drop
+    defaultMode: keep
+    headers:
+      # choices are keep, drop, redact
+      defaultMode: drop
+      # Authorization: redact
+rbac:
+  enabled: true
+
+metrics:
+  prometheus:
+    enabled: true
+  datadog:
+    enabled: false
+  statsd:
+    enabled: false
+
+deployment:
+  hostPort:
+    httpEnabled: false
+    httpsEnabled: false
+    dashboardEnabled: false
+
+sendAnonymousUsage: false
+
+tracing:
+  enabled: false
+  serviceName: traefik
